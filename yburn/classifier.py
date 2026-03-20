@@ -27,24 +27,32 @@ STRONG_MECHANICAL = {
     "check", "status", "health", "ping", "monitor", "backup", "cleanup",
     "rotate", "prune", "archive", "kill", "restart", "vacuum", "verify",
     "diagnostic", "diagnostics", "snapshot", "rollback", "reindex",
+    "sync", "deploy", "terminate", "compress", "heartbeat", "spawn",
+    "fetch", "validate", "build", "script",
 }
 WEAK_MECHANICAL = {
     "count", "list", "report", "disk", "uptime", "memory", "git", "push",
-    "commit", "copy", "delete", "move", "run", "execute", "script", "cron",
+    "commit", "copy", "delete", "move", "execute", "cron",
     "index", "sweep", "flag", "clean", "reset", "size", "maintenance",
     "alert", "notify", "send", "port", "firewall", "process", "pid",
+    "configure", "queue", "load", "parse", "lock", "unlock", "scan",
+    "collect", "download", "upload", "trigger", "retry",
 }
 STRONG_REASONING = {
     "analyze", "recommend", "draft", "write", "evaluate", "decide",
     "strategy", "synthesize", "create", "compose", "research", "advise",
     "reflect", "propose", "generate", "counsel", "creative",
+    "interpret", "brainstorm", "optimize", "forecast", "predict",
+    "assess", "critique", "strategize", "insights",
 }
 WEAK_REASONING = {
     "review", "summarize", "compare", "prioritize", "brief", "morning",
-    "insights", "opportunities", "trends", "competitive", "weekly",
+    "trends", "competitive", "weekly",
     "learning", "improvement", "audit", "intelligence", "mentor",
     "self-improvement", "debrief", "agenda", "pipeline", "content",
     "publish", "newsletter", "blog", "tweet", "engagement",
+    "outline", "explore", "curate", "ideate", "detect", "facilitate",
+    "imagine",
 }
 
 # Shell command patterns that indicate mechanical work
