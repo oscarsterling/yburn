@@ -45,26 +45,35 @@ def scan_crons() -> List[CronJob]:
     """
     logger.info("Scanning cron jobs via openclaw CLI")
     try:
+        # Try JSON format first
         result = subprocess.run(
-            ["openclaw", "cron", "list"],
+            ["openclaw", "cron", "list", "--json"],
             capture_output=True,
             text=True,
-            check=True,
         )
+        if result.returncode != 0 or not result.stdout.strip().startswith(("{", "[")):
+            # Fallback: try without --json flag and parse structured output
+            result = subprocess.run(
+                ["openclaw", "cron", "list"],
+                capture_output=True,
+                text=True,
+            )
     except FileNotFoundError:
         raise RuntimeError(
             "openclaw CLI not found. Ensure it is installed and on your PATH."
         )
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(
-            f"openclaw cron list failed (exit code {e.returncode}): {e.stderr.strip()}"
-        )
 
     try:
         data = json.loads(result.stdout)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"Failed to parse openclaw output as JSON: {e}")
+    except json.JSONDecodeError:
+        raise RuntimeError(
+            "openclaw cron list did not return JSON. "
+            "Try exporting cron jobs manually: openclaw cron list > crons.json"
+        )
 
+    # Handle both {"jobs": [...]} and [...] formats
+    if isinstance(data, dict) and "jobs" in data:
+        data = data["jobs"]
     if not isinstance(data, list):
         raise RuntimeError(
             f"Expected a JSON array from openclaw, got {type(data).__name__}"
