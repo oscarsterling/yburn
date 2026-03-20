@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yburn"
+version = "0.1.0"
+description = "Why burn tokens? Audit AI agent cron jobs and replace mechanical ones with local scripts."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    {name = "Oscar Sterling"},
+]
+dependencies = [
+    "requests",
+    "pyyaml",
+]
+
+[project.scripts]
+yburn = "yburn.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["yburn*"]
