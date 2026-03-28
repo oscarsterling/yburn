@@ -2,238 +2,294 @@
 
 **Why burn tokens on tasks that don't think?**
 
-Audit your AI agent cron jobs, identify the ones that never needed an LLM, and replace them with local scripts that run in under a second and cost nothing.
+Audit your AI agent cron jobs, identify the ones that never needed an LLM, and replace them with local scripts that run in under a second and cost nothing. Plus standalone health monitoring tools that work on any machine.
 
 ![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Build](https://img.shields.io/badge/build-passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-252%20passing-brightgreen)
+
+```bash
+pip install yburn
+```
+
+---
+
+## 30-Second Quickstart
+
+```bash
+# See what you're burning tokens on
+yburn audit
+
+# Check your system health (no tokens, no LLM, instant)
+yburn-health
+
+# Monitor your endpoints
+yburn-watch https://yoursite.com https://api.yoursite.com/health
+```
+
+That's it. Three commands. Zero configuration needed.
 
 ---
 
 ## The Problem
 
-If you run an AI agent with scheduled cron jobs, a significant portion of those jobs are probably doing mechanical work: running a script, checking an endpoint, pushing a git backup, rotating a log file. They do not reason. They do not need context. They just execute the same deterministic steps every time.
+Real numbers from a live 97-cron OpenClaw deployment (March 2026):
 
-But they still call the LLM. Every run. Every day.
+- **51 of 97 crons (53%) were mechanical** - the LLM was doing nothing a shell script couldn't do faster
+- **~30 seconds per LLM cron** drops to **under 1 second** with a local script
+- Common culprits: system health checks, DB maintenance, git backups, cron audits, uptime monitoring
 
-Real numbers from a live 92-cron OpenClaw setup (M10 audit, March 2026):
+Your AI agent is spending 30 seconds and burning tokens to check if your disk is full. A Python script does it in 200ms for free.
 
-- **44 of 92 crons (48%) were mechanical** - the LLM was doing nothing a Python script couldn't do faster
-- **15-25% of daily cron token spend** is recoverable by converting the clearest mechanical jobs
-- **30-second average execution time** per mechanical LLM cron drops to **under 1 second** with a local script
-- Common culprits: DB maintenance, OAuth health checks, git backups, system diagnostics, update checkers
-
-The community has been finding this manually. A developer at Moltbook AI manually replaced two OpenClaw crons (CLAW token minting, crypto price reporting) with Python scripts and dropped those jobs to zero tokens. Cyfrin documented a 21,000-token charge for a one-word typo fix. nickbuilds.ai cut their OpenClaw costs by 60% by auditing crons and switching models. Yburn automates the audit-to-replacement workflow they all did by hand.
+The community has been discovering this one job at a time. Developers at Moltbook AI manually replaced OpenClaw crons with Python scripts. Others cut AI agent costs by 60% by auditing crons and switching models. Yburn automates what they all did by hand.
 
 ---
 
-## The Solution
+## What's In The Box
 
-Yburn is a CLI tool that:
+### The Audit Engine (scan, classify, convert, replace, rollback)
 
-- **Scans** your agent cron configuration and extracts every scheduled job
-- **Classifies** each job as `MECHANICAL` (no reasoning needed), `REASONING` (keep the LLM), or `UNSURE` (needs your call)
-- **Converts** mechanical jobs to local Python scripts using a built-in template library
-- **Replaces** the original cron with a script-based equivalent and tracks the swap so you can roll back
-
-Classification is deterministic keyword scoring - no LLM required to classify. The tool that finds your LLM waste does not itself create LLM waste.
-
----
-
-## Quick Demo
+Five verbs, one tool, zero tokens after conversion:
 
 ```
 $ yburn audit
 
 Scanning cron jobs...
-Found 92 jobs. Classifying...
+Found 97 jobs. Classifying...
 
-  Mechanical:  44 jobs (convertible)
-  Reasoning:   14 jobs (kept as-is)
-  Unsure:      34 jobs (need your input)
+  Mechanical:  51 jobs (convertible)
+  Reasoning:   16 jobs (kept as-is)
+  Unsure:      30 jobs (need your input)
 
 --- MECHANICAL (convertible) ---
   DB Maintenance - Daily Full [enabled]
-    Score: mech=18 reason=2 conf=1.00
+    Score: mech=16 reason=0 conf=1.00
     Template -> system-diagnostics
 
-  OAuth Token Health Check [enabled]
-    Score: mech=16 reason=1 conf=1.00
-    Template -> api-endpoint-check
-
-  Pre-Dream Git Snapshot [enabled]
-    Score: mech=15 reason=0 conf=1.00
+  Nightly Backup + Git Commit [enabled]
+    Score: mech=17 reason=2 conf=0.79
     Template -> git-backup-status
 
-  OpenClaw Update Check [enabled]
-    Score: mech=12 reason=3 conf=0.82
-    Template -> api-endpoint-check
-
-Estimated monthly savings: ~$4.20 in tokens
-Speed improvement: ~30s avg -> <1s per converted job
-
-Run yburn convert --all to convert mechanical jobs.
+  Daily Cron Health Report [enabled]
+    Score: mech=11 reason=1 conf=0.83
+    Template -> cron-health-report
+  ...
 ```
+
+Classification is deterministic keyword scoring. No LLM call needed. The tool that finds your LLM waste does not itself create LLM waste.
+
+### yburn-health: System Health Monitor
+
+Three modes for three audiences. One install.
+
+**Universal (any machine):**
+```
+$ yburn-health
+
+yburn-health v1.0.0
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ CPU: 12% (10 cores)
+✅ Memory: 8.2/16 GB (51%)
+✅ Disk /: 45% (234 GB free)
+⚠️ Disk /data: 87% (12 GB free)
+✅ Load: 1.2, 0.8, 0.5
+✅ Uptime: 14 days, 3 hours
+✅ Docker: 12 containers (11 running)
+✅ Network: reachable (23ms)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Status: WARNING (1 alert)
+```
+
+**OpenClaw users** get gateway, cron, session, and channel health:
+```
+$ yburn-health --openclaw
+
+... (all universal checks) ...
+
+--- OpenClaw ---
+✅ Gateway: running (v0.26.1, up 3d 14h)
+✅ Crons: 97 total (92 enabled, 5 disabled)
+⚠️ Cron failures: 2 jobs with 3+ consecutive failures
+✅ Sessions: 4 active, 0 stuck
+✅ Channels: Telegram connected, Discord connected
+✅ Memory DB: 142 MB (healthy)
+```
+
+**Claude Code users** get scheduled task and session checks:
+```
+$ yburn-health --claude-code
+
+... (all universal checks) ...
+
+--- Claude Code ---
+✅ CLI: claude available (v1.2.3)
+✅ Sessions: 3 recent
+✅ Scheduled tasks: 5 active, 0 expired
+```
+
+### yburn-watch: Endpoint and Uptime Monitor
+
+```
+$ yburn-watch https://clelp.ai https://api.example.com/health
+
+yburn-watch v1.0.0
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ https://clelp.ai - 200 OK (285ms)
+   SSL: valid, 35 days remaining
+✅ https://api.example.com/health - 200 OK (89ms)
+   SSL: valid, 45 days remaining
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Status: ALL UP (2 endpoints)
+```
+
+Checks HTTP status, response time, and SSL certificate expiry. Warns at 14 days, critical at 7.
 
 ---
 
 ## Installation
 
-Requires Python 3.9 or higher. A virtual environment is strongly recommended.
-
 ```bash
-# Create and activate a venv (recommended)
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install from source
-git clone https://github.com/oscarsterling/yburn.git
-cd yburn
-pip install -e .
-
-# Install with dev dependencies (for testing)
-pip install -e '.[dev]'
+pip install yburn
 ```
 
-Verify:
+Requires Python 3.9+. Works on macOS and Linux (including WSL).
 
-```bash
-yburn version
-# yburn 0.1.0
-```
+The flagship tools (`yburn-health`, `yburn-watch`) use stdlib only. Zero dependencies. The audit engine uses `requests` and `pyyaml` (installed automatically).
 
 ---
 
-## Usage
+## How The Audit Engine Works
 
-### `yburn audit`
-
-Scan and classify all cron jobs. This is the starting point. Read-only, no changes made.
-
-```bash
-# Audit your live cron setup
-yburn audit
-
-# Verbose mode (shows reasoning jobs too)
-yburn audit --verbose
-
-# Lower the classification threshold (more jobs classified)
-yburn audit --threshold 2
-
-# Audit from a JSON file (useful for testing or CI)
-yburn audit --file jobs.json
+```
+scan -> classify -> convert -> replace -> (rollback if needed)
 ```
 
-### `yburn convert`
+1. **Scan:** Reads your cron jobs via `openclaw cron list` (or any JSON file with `--file`).
 
-Generate a local Python replacement script for a mechanical job.
+2. **Classify:** Scores each job against weighted keyword sets. Mechanical signals: shell commands, file ops, status checks. Reasoning signals: analysis, drafting, strategy, synthesis. No LLM call needed.
+
+3. **Convert:** Matches mechanical jobs to built-in templates. Generates standalone Python scripts that replicate the job without an LLM. Preview before confirming.
+
+4. **Replace:** Disables the original LLM cron, activates the script-based equivalent on the same schedule. Tracks everything for rollback.
+
+5. **Rollback:** One command restores the original. `yburn rollback <job-id>`. Originals are never deleted.
+
+---
+
+## Full Command Reference
+
+### Audit
 
 ```bash
-# Convert a specific job (by name or ID)
-yburn convert "OAuth Token Health Check"
-
-# Preview without writing any files
-yburn convert "OAuth Token Health Check" --dry-run
-
-# Convert all mechanical jobs at once
-yburn convert --all
-
-# Preview all conversions without writing
-yburn convert --all --dry-run
+yburn audit                    # Scan and classify all cron jobs
+yburn audit --verbose          # Show reasoning jobs too
+yburn audit --threshold 2      # Lower threshold (more jobs classified)
+yburn audit --file jobs.json   # Audit from a JSON file
 ```
 
-### `yburn replace`
-
-Swap the original LLM cron for the generated script-based cron.
+### Convert
 
 ```bash
-# Replace with confirmation prompt
-yburn replace <job-id>
+yburn convert <job-id>         # Convert one job to a local script
+yburn convert --all            # Convert all mechanical jobs
+yburn convert --all --dry-run  # Preview without writing files
+```
 
-# Skip confirmation
-yburn replace <job-id> --yes
+### Replace
 
-# Preview the replacement without making changes
+```bash
+yburn replace <job-id>         # Swap original cron for script version
+yburn replace <job-id> --yes   # Skip confirmation
 yburn replace <job-id> --dry-run
 ```
 
-### `yburn list`
-
-Show all converted jobs and their replacement status.
+### List, Test, Rollback
 
 ```bash
-yburn list
+yburn list                     # Show all active replacements
+yburn test <job-id>            # Run converted script once, show output
+yburn rollback <job-id>        # Restore original cron
 ```
 
-### `yburn test`
-
-Run a converted script once and display the output. Confirm it works before replacing.
+### Health and Watch
 
 ```bash
-yburn test "OAuth Token Health Check"
-```
+yburn-health                   # System health (universal)
+yburn-health --openclaw        # + OpenClaw checks
+yburn-health --claude-code     # + Claude Code checks
+yburn-health --json            # JSON output for piping
+yburn-health --processes nginx,postgres  # Watch specific processes
 
-### `yburn rollback`
-
-Undo a replacement and restore the original cron configuration.
-
-```bash
-yburn rollback <job-id>
-```
-
-### `yburn version`
-
-```bash
-yburn version
+yburn-watch https://example.com          # Check one URL
+yburn-watch url1 url2 url3               # Check multiple
+yburn-watch --json                       # JSON output
+yburn-watch --timeout 5                  # Custom timeout (seconds)
+yburn-watch --warn-ms 2000              # Response time warning threshold
 ```
 
 ---
 
-## How It Works
+## Alert Channels
 
+Both `yburn-health` and `yburn-watch` support sending alerts via:
+
+- **stdout** (default)
+- **Telegram** (`YBURN_TELEGRAM_TOKEN` + `YBURN_TELEGRAM_CHAT_ID`)
+- **Discord** (`YBURN_DISCORD_WEBHOOK`)
+- **Slack** (`YBURN_SLACK_WEBHOOK`)
+
+Set via environment variables or `~/.yburn/health.yaml` / `~/.yburn/watch.yaml`.
+
+---
+
+## Exit Codes
+
+All tools use consistent exit codes for scripting and CI:
+
+| Code | Meaning |
+|------|---------|
+| 0    | Healthy / all up |
+| 1    | Warnings present |
+| 2    | Critical issues |
+
+```bash
+yburn-health || echo "Something needs attention"
 ```
-scan -> classify -> convert -> replace
-```
-
-1. **Scan:** Reads your cron configuration (OpenClaw via `openclaw cron list`, or a JSON file). Extracts job name, schedule, model, payload text, and tool calls.
-
-2. **Classify:** Scores each job against weighted keyword sets. Mechanical signals: shell commands, script invocations, file operations, exit-on-result patterns. Reasoning signals: synthesis, analysis, research, creative tasks, decision language. Score delta determines classification.
-
-3. **Convert:** Matches the mechanical job to a built-in template by keyword overlap. Generates a standalone Python script that replicates the job's behavior without an LLM call.
-
-4. **Replace:** Records the replacement, disables the original LLM cron, and activates the script-based equivalent. Tracks the swap in a local database so rollback is always available.
 
 ---
 
 ## Template Library
 
-Yburn ships with five built-in templates covering the most common mechanical cron patterns:
+Five built-in templates for the most common mechanical cron patterns:
 
-| Template | What It Replaces |
-|---|---|
-| `system-diagnostics` | Disk, CPU, memory, uptime, process health checks |
-| `api-endpoint-check` | HTTP health checks, OAuth token validation, status pings |
-| `cron-health-report` | Cron job status audits, failure counts, schedule compliance |
-| `git-backup-status` | Git add/commit/push automations, repo state reporting |
-| `file-watcher` | File existence checks, size monitors, rotation triggers |
+| Template | Replaces |
+|----------|----------|
+| `system-diagnostics` | Disk, CPU, memory, uptime, process checks |
+| `cron-health-report` | Cron status audits, failure counts |
+| `git-backup-status` | Git add/commit/push, repo state checks |
+| `api-endpoint-check` | HTTP health checks, OAuth validation |
+| `file-watcher` | File change detection, size monitoring |
 
-If no template matches your job, Yburn flags it for manual review. Custom templates can be added to `~/.yburn/templates/`. Template spec: `yburn/templates/TEMPLATE_SPEC.md`.
-
-The M10 audit identified two high-value templates not yet built: `script-runner` (for jobs that already wrap an existing Python/bash script) and `model-setter` (for jobs that only call session_status to set model overrides). These are on the roadmap.
+Custom templates go in `~/.yburn/templates/`. See `yburn/templates/TEMPLATE_SPEC.md`.
 
 ---
 
 ## Supported Platforms
 
-**OpenClaw (primary integration)**
+| Platform | Status |
+|----------|--------|
+| macOS    | Full support |
+| Linux    | Full support |
+| WSL      | Full support (Linux mode) |
+| Windows  | Planned for v2 |
 
-Yburn reads from `openclaw cron list` JSON output and writes back to the OpenClaw cron system. Native support for OpenClaw's job schema (`sessionTarget`, `payload.kind`, `delivery`, `schedule`).
+**Agent frameworks:**
 
-**Extensible**
-
-The scanner accepts any JSON array of job objects via `--file`. If your agent framework can export cron jobs to JSON, Yburn can classify them. Replacement script generation is framework-agnostic.
-
-Planned integrations: Claude Code (AGENTS.md cron annotations), AutoGen scheduled agents, LangGraph cron nodes.
+| Framework | Status |
+|-----------|--------|
+| OpenClaw  | Native integration (`openclaw cron list`) |
+| Claude Code | Health checks via `--claude-code` flag |
+| Any JSON  | `yburn audit --file jobs.json` |
 
 ---
 
@@ -241,17 +297,18 @@ Planned integrations: Claude Code (AGENTS.md cron annotations), AutoGen schedule
 
 ```
 $ pytest
-
-platform darwin -- Python 3.14.2
-collected 124 items
-
-tests/test_classifier.py    46 passed
-tests/test_converter.py     33 passed
-tests/test_replacer.py      23 passed
-tests/test_scanner.py       37 passed
-tests/test_telegram.py      15 passed
-============================== 124 passed in 0.06s
+252 passed in 1.68s
 ```
+
+---
+
+## What's Next
+
+- More templates (OAuth checker, DB maintenance, log scanner)
+- Interactive audit flow with guided prompts
+- Auto-detection of cron system (OpenClaw, crontab, systemd, Claude Code)
+- Token savings tracking over time
+- Community template contributions
 
 ---
 
@@ -261,17 +318,16 @@ Contributions welcome, especially:
 
 - New templates for common mechanical cron patterns
 - Scanner adapters for other agent frameworks
-- Classification signal improvements (see `M10-RESULTS.md` for known edge cases)
+- Classification signal improvements
 
 ```bash
-# Run tests
+git clone https://github.com/oscarsterling/yburn.git
+cd yburn
+pip install -e '.[dev]'
 pytest
-
-# Run with coverage
-pytest --cov=yburn
 ```
 
-Please open an issue before submitting a large PR. The classification engine is the core of the tool - changes to scoring weights need evidence from real cron audits.
+Please open an issue before submitting a large PR.
 
 ---
 
@@ -281,4 +337,4 @@ MIT. See `LICENSE`.
 
 ---
 
-*Built because the blog posts all found the same fix. Someone had to automate it.*
+*Built because 53% of our cron jobs were burning tokens on work that doesn't think.*
