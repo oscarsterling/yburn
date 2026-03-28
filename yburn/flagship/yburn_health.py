@@ -237,21 +237,38 @@ def check_disk(threshold: int = 85) -> List[CheckResult]:
         lines = out.strip().splitlines()[1:]  # skip header
         seen: set = set()
         for line in lines:
+            # df -P uses fixed columns: Filesystem, 1024-blocks, Used, Available, Capacity, Mounted on
+            # Mount point is everything from column 6 onward (handles spaces in fs names).
+            # We parse from the RIGHT: mount is last token(s), pct is the token ending with %.
             parts = line.split()
             if len(parts) < 6:
                 continue
-            mount = parts[5]
-            if mount in seen:
+            # Find the percentage column (ends with %)
+            pct_idx = -1
+            for i, p in enumerate(parts):
+                if p.endswith("%"):
+                    pct_idx = i
+                    break
+            if pct_idx < 3:
+                continue
+            mount = " ".join(parts[pct_idx + 1:])
+            if not mount or mount in seen:
                 continue
             seen.add(mount)
             # Skip pseudo-filesystems
             if mount.startswith(("/dev", "/sys", "/proc", "/run")):
                 continue
-            total_kb = int(parts[1])
+            try:
+                total_kb = int(parts[pct_idx - 3])
+            except (ValueError, IndexError):
+                continue
             if total_kb == 0:
                 continue
-            avail_kb = int(parts[3])
-            used_pct = int(parts[4].rstrip("%"))
+            try:
+                avail_kb = int(parts[pct_idx - 1])
+                used_pct = int(parts[pct_idx].rstrip("%"))
+            except (ValueError, IndexError):
+                continue
             free_gb = round(avail_kb / (1024 ** 2), 1)
             status = CRITICAL if used_pct > 95 else (WARN if used_pct >= threshold else OK)
             results.append(CheckResult(
@@ -281,8 +298,9 @@ def check_uptime() -> CheckResult:
     """System uptime."""
     try:
         if platform.system() == "Darwin":
+            sysctl = "/usr/sbin/sysctl" if os.path.exists("/usr/sbin/sysctl") else "sysctl"
             out = subprocess.check_output(
-                ["sysctl", "-n", "kern.boottime"], text=True, timeout=5,
+                [sysctl, "-n", "kern.boottime"], text=True, timeout=5,
             )
             # Output like: { sec = 1700000000, usec = 0 } ...
             sec_str = out.split("sec =")[1].split(",")[0].strip()
