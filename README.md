@@ -12,6 +12,10 @@ Audit your AI agent cron jobs, identify the ones that never needed an LLM, and r
 pip install yburn
 ```
 
+<p align="center">
+  <img src="docs/gifs/yburn-audit.gif" alt="yburn audit demo" width="700">
+</p>
+
 ---
 
 ## 30-Second Quickstart
@@ -82,6 +86,10 @@ Classification is deterministic keyword scoring. No LLM call needed. The tool th
 
 Three modes for three audiences. One install.
 
+<p align="center">
+  <img src="docs/gifs/yburn-health.gif" alt="yburn-health demo" width="700">
+</p>
+
 **Universal (any machine):**
 ```
 $ yburn-health
@@ -128,6 +136,10 @@ $ yburn-health --claude-code
 ```
 
 ### yburn-watch: Endpoint and Uptime Monitor
+
+<p align="center">
+  <img src="docs/gifs/yburn-watch.gif" alt="yburn-watch demo" width="700">
+</p>
 
 ```
 $ yburn-watch https://clelp.ai https://api.example.com/health

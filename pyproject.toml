@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yburn"
-version = "1.0.1"
+version = "1.0.2"
 description = "Why burn tokens? Audit AI agent cron jobs, replace mechanical ones with local scripts. Includes yburn-health (system monitor) and yburn-watch (uptime monitor)."
 readme = "README.md"
 license = "MIT"
