@@ -2,8 +2,8 @@
   "name": "cron-health-report",
   "description": "Lists all cron jobs, counts OK/FAIL/disabled, reports health status",
   "version": "1.0",
-  "match_keywords": ["cron", "health", "report", "status", "jobs", "audit", "scheduled"],
-  "replaces_patterns": ["cron health", "health report", "cron audit", "cron status"],
+  "match_keywords": ["cron", "jobs", "scheduled"],
+  "replaces_patterns": ["cron health", "cron audit", "cron status"],
   "parameters": [
     {
       "name": "include_disabled",

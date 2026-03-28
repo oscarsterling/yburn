@@ -95,7 +95,8 @@ def load_templates(templates_dir: Optional[Path] = None) -> List[TemplateManifes
 def match_job_to_template(
     job: CronJob,
     templates: List[TemplateManifest],
-    min_score: int = 2,
+    min_score: int = 3,
+    require_pattern_match: bool = False,
 ) -> MatchResult:
     """Find the best matching template for a job.
 
@@ -106,6 +107,8 @@ def match_job_to_template(
         job: The classified CronJob.
         templates: Available templates.
         min_score: Minimum score to consider a match.
+        require_pattern_match: When True, only return a match if at least
+            one replaces_pattern matched (not just keywords).
 
     Returns:
         MatchResult with best template (or None if no match).
@@ -142,6 +145,13 @@ def match_job_to_template(
             best_patterns = matched_pat
 
     if best_score >= min_score and best_template:
+        if require_pattern_match and not best_patterns:
+            return MatchResult(
+                template=None,
+                score=best_score,
+                matched_keywords=best_keywords,
+                matched_patterns=best_patterns,
+            )
         return MatchResult(
             template=best_template,
             score=best_score,

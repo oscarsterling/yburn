@@ -150,6 +150,43 @@ class TestMatchJobToTemplate:
         result = match_job_to_template(job, templates, min_score=100)
         assert result.template is None
 
+    def test_require_pattern_match_rejects_keyword_only(self, templates):
+        """When require_pattern_match=True, keyword-only matches return None."""
+        job = make_job(
+            name="API Health Check",
+            payload_text="check api endpoint url status uptime ping",
+        )
+        result = match_job_to_template(job, templates, require_pattern_match=True)
+        assert result.template is None
+
+    def test_require_pattern_match_allows_pattern_match(self, templates):
+        """When require_pattern_match=True, matches with patterns still work."""
+        job = make_job(
+            name="Nightly System Diagnostic",
+            payload_text="check disk usage cpu memory uptime",
+        )
+        result = match_job_to_template(job, templates, require_pattern_match=True)
+        assert result.template is not None
+        assert result.template.name == "system-diagnostics"
+
+    def test_generic_job_no_longer_matches_system_diagnostics(self, templates):
+        """Jobs with only generic words like 'health' or 'status' should not match."""
+        job = make_job(
+            name="OAuth Token Health Check",
+            payload_text="check oauth token health status",
+        )
+        result = match_job_to_template(job, templates)
+        assert result.template is None or result.template.name != "system-diagnostics"
+
+    def test_unrelated_job_no_longer_matches_system_diagnostics(self, templates):
+        """DB maintenance is not system diagnostics."""
+        job = make_job(
+            name="DB Maintenance - Daily Full",
+            payload_text="vacuum analyze reindex database tables",
+        )
+        result = match_job_to_template(job, templates)
+        assert result.template is None or result.template.name != "system-diagnostics"
+
     def test_real_job_nightly_diagnostic(self, templates, sample_jobs):
         job = find_job(sample_jobs, "Nightly System Diagnostic")
         result = match_job_to_template(job, templates)
