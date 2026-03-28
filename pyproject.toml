@@ -24,6 +24,8 @@ dev = [
 
 [project.scripts]
 yburn = "yburn.cli:main"
+yburn-health = "yburn.flagship.yburn_health:main"
+yburn-watch = "yburn.flagship.yburn_watch:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
