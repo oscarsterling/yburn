@@ -305,6 +305,28 @@ Custom templates go in `~/.yburn/templates/`. See `yburn/templates/TEMPLATE_SPEC
 
 ---
 
+## Tips: Running Converted Scripts via Cron
+
+When yburn replaces an LLM cron with a script-based one, a small model (like Haiku) still runs the script. Here's what we learned running this on our own 97-cron setup:
+
+**Use this prompt pattern for the cron payload:**
+```
+Run this command exactly and produce the output as your response.
+Do not send any messages yourself, delivery is handled automatically.
+
+python3 /path/to/your/yburn/script.py
+```
+
+**Why this matters:** Lower-reasoning models (Haiku, GPT-4o-mini) will try to "help" by interpreting the script output, sending messages on their own, or hallucinating results. This prompt keeps them focused: run the command, return the output, stop. Let your cron system's delivery mechanism (OpenClaw's `announce`, webhooks, etc.) handle routing.
+
+**Other tips:**
+- Set `delivery.mode: "announce"` on OpenClaw crons so output routes automatically. Don't ask the model to send messages.
+- Use `timeoutSeconds: 60` for script-based crons. The scripts run in under a second, but the model needs time to process output.
+- Test with `yburn test <job-id>` before replacing. Always.
+- Keep `yburn rollback <job-id>` in your back pocket. Originals are never deleted.
+
+---
+
 ## Test Suite
 
 ```
