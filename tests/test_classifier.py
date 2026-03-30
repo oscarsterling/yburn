@@ -206,7 +206,7 @@ class TestHeuristics:
 
 class TestEdgeCases:
     def test_empty_payload(self):
-        job = make_job(payload_text="")
+        job = make_job(name="xyz", payload_text="")
         result = classify_job(job)
         assert result.classification == Classification.UNSURE
         assert result.mechanical_score == 0
@@ -223,7 +223,7 @@ class TestEdgeCases:
         assert 0.0 <= result.confidence <= 1.0
 
     def test_confidence_zero_when_equal(self):
-        job = make_job(payload_text="")
+        job = make_job(name="xyz", payload_text="")
         result = classify_job(job)
         assert result.confidence == 0.0
 

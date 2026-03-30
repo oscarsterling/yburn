@@ -1,14 +1,12 @@
 """Cron replacement logic for yburn.
 
-Handles the 'last mile': creating new cron jobs that run generated scripts,
+Handles the 'last mile': generating zero-LLM cron replacements,
 disabling originals, tracking replacements, and rollback.
 """
 
 import json
 import logging
-import os
-import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -75,9 +73,6 @@ def build_replacement_command(
 ) -> Dict:
     """Build the replacement cron job specification.
 
-    Returns a dict describing what the new cron job should look like.
-    Does NOT create it (that requires user confirmation).
-
     Args:
         original_job_id: ID of the original cron job.
         original_name: Name of the original job.
@@ -85,25 +80,62 @@ def build_replacement_command(
         script_path: Path to the generated script.
 
     Returns:
-        Dict with new cron job specification.
+        Dict with crontab guidance and disable command.
     """
+    cron_expr = _schedule_to_crontab(schedule)
+    safe_name = _sanitize_job_name(original_name)
+    log_path = f"~/.yburn/logs/{safe_name}.log"
+
     return {
-        "name": f"[yburn] {original_name}",
-        "schedule": schedule,
-        "payload": {
-            "kind": "agentTurn",
-            "message": (
-                f"Run the yburn-generated script:\n\n"
-                f"python3 {script_path}\n\n"
-                f"If exit code is non-zero, report the error. "
-                f"Otherwise produce NO output."
-            ),
-            "model": "haiku",
-            "timeoutSeconds": 60,
-        },
-        "sessionTarget": "isolated",
+        "crontab_entry": (
+            "# one-time job - set up manually"
+            if cron_expr == "# one-time job - set up manually"
+            else f"{cron_expr} python3 {script_path} >> {log_path} 2>&1"
+        ),
+        "disable_command": f"openclaw cron update {original_job_id} --disable",
         "original_job_id": original_job_id,
+        "script_path": script_path,
     }
+
+
+def _sanitize_job_name(name: str) -> str:
+    """Create a filesystem-safe job name."""
+    return "".join(c.lower() if c.isalnum() or c in "-_" else "-" for c in name)
+
+
+def _schedule_to_crontab(schedule: dict) -> str:
+    """Convert an OpenClaw schedule dict to a crontab expression."""
+    kind = schedule.get("kind")
+
+    if kind == "cron":
+        return schedule.get("expr", "0 * * * *")
+
+    if kind == "at":
+        return "# one-time job - set up manually"
+
+    if kind == "every":
+        every_ms = schedule.get("everyMs")
+        if not isinstance(every_ms, (int, float)) or every_ms <= 0:
+            return "0 * * * *"
+
+        minutes = max(1, round(every_ms / 60000))
+        if minutes >= 1440 and minutes % 1440 == 0:
+            days = max(1, minutes // 1440)
+            if days == 1:
+                return "0 0 * * *"
+            return f"0 0 */{days} * *"
+        if minutes >= 60 and minutes % 60 == 0:
+            hours = max(1, minutes // 60)
+            if hours == 1:
+                return "0 * * * *"
+            if 24 % hours == 0:
+                return f"0 */{hours} * * *"
+            return "0 * * * *"
+        if minutes <= 59:
+            return f"*/{minutes} * * * *"
+        return "0 * * * *"
+
+    return "0 * * * *"
 
 
 def preview_replacement(
@@ -136,12 +168,10 @@ def preview_replacement(
         f"  Schedule: {schedule_expr}",
         f"  Action: Will be DISABLED (not deleted)",
         "",
-        "NEW JOB:",
-        f"  Name: {spec['name']}",
-        f"  Schedule: {schedule_expr} (same)",
-        f"  Runs: python3 {script_path}",
-        f"  Model: haiku (minimal, just runs the script)",
-        f"  Timeout: 60s",
+        "NEW LOCAL CRON:",
+        f"  Script: {spec['script_path']}",
+        f"  Crontab: {spec['crontab_entry']}",
+        f"  Disable: {spec['disable_command']}",
         "",
         "ROLLBACK: yburn rollback {original_job_id}",
         "===========================",

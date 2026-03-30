@@ -11,6 +11,7 @@ from yburn.converter import (
     ConversionResult,
     MatchResult,
     TemplateManifest,
+    check_output_config,
     generate_script,
     load_templates,
     match_job_to_template,
@@ -256,6 +257,44 @@ class TestGenerateScript:
         result = generate_script(job, fake_template)
         assert not result.success
         assert "not found" in result.error
+
+
+class TestCheckOutputConfig:
+    def test_missing_both_vars(self, monkeypatch):
+        monkeypatch.delenv("YBURN_TELEGRAM_TOKEN", raising=False)
+        monkeypatch.delenv("YBURN_TELEGRAM_CHAT_ID", raising=False)
+
+        configured, warnings = check_output_config()
+
+        assert configured is False
+        assert warnings == ["No output channel configured - script will output to stdout only"]
+
+    def test_missing_chat_id_only(self, monkeypatch):
+        monkeypatch.setenv("YBURN_TELEGRAM_TOKEN", "token")
+        monkeypatch.delenv("YBURN_TELEGRAM_CHAT_ID", raising=False)
+
+        configured, warnings = check_output_config()
+
+        assert configured is False
+        assert warnings == ["Missing YBURN_TELEGRAM_CHAT_ID - script will output to stdout only"]
+
+    def test_missing_token_only(self, monkeypatch):
+        monkeypatch.delenv("YBURN_TELEGRAM_TOKEN", raising=False)
+        monkeypatch.setenv("YBURN_TELEGRAM_CHAT_ID", "123")
+
+        configured, warnings = check_output_config()
+
+        assert configured is False
+        assert warnings == ["Missing YBURN_TELEGRAM_TOKEN - script will output to stdout only"]
+
+    def test_both_vars_set(self, monkeypatch):
+        monkeypatch.setenv("YBURN_TELEGRAM_TOKEN", "token")
+        monkeypatch.setenv("YBURN_TELEGRAM_CHAT_ID", "123")
+
+        configured, warnings = check_output_config()
+
+        assert configured is True
+        assert warnings == []
 
 
 # --- TestPreviewConversion ---

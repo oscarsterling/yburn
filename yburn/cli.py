@@ -18,6 +18,7 @@ from yburn.classifier import (
 )
 from yburn.config import Config
 from yburn.converter import (
+    check_output_config,
     generate_script,
     load_templates,
     match_job_to_template,
@@ -146,7 +147,7 @@ def cmd_convert(args):
         if not job:
             print(color(f"Job not found: {args.job_id}", RED))
             return 1
-        return _convert_single(job, templates, config, args.dry_run)
+        return _convert_single(job, templates, config, args.dry_run, args.strict)
 
     elif args.all:
         # Convert all mechanical jobs
@@ -161,7 +162,7 @@ def cmd_convert(args):
         print(f"Converting {len(mechanical)} mechanical jobs...\n")
         success_count = 0
         for job, _ in mechanical:
-            result = _convert_single(job, templates, config, args.dry_run)
+            result = _convert_single(job, templates, config, args.dry_run, args.strict)
             if result == 0:
                 success_count += 1
             print()
@@ -173,7 +174,7 @@ def cmd_convert(args):
         return 1
 
 
-def _convert_single(job, templates, config, dry_run=False):
+def _convert_single(job, templates, config, dry_run=False, strict=False):
     """Convert a single job."""
     match = match_job_to_template(job, templates)
     if not match.template:
@@ -190,6 +191,13 @@ def _convert_single(job, templates, config, dry_run=False):
         print(color("  [DRY RUN] Would generate script but skipping.", BLUE))
         return 0
 
+    configured, warnings = check_output_config()
+    for warning in warnings:
+        print(color(f"  Warning: {warning}", YELLOW))
+    if strict and not configured:
+        print(color("  Error: output channel configuration is required in strict mode.", RED))
+        return 1
+
     # Generate script
     result = generate_script(job, match.template)
     if result.success:
@@ -202,6 +210,13 @@ def _convert_single(job, templates, config, dry_run=False):
 
 def cmd_replace(args):
     """Replace an original cron with a script-based cron."""
+    configured, warnings = check_output_config()
+    for warning in warnings:
+        print(color(f"Warning: {warning}", YELLOW))
+    if args.strict and not configured:
+        print(color("Error: output channel configuration is required in strict mode.", RED))
+        return 1
+
     jobs = scan_crons()
     job = None
     for j in jobs:
@@ -232,6 +247,7 @@ def cmd_replace(args):
         return 1
 
     # Show preview
+    spec = build_replacement_command(job.id, job.name, job.schedule, str(script_path))
     preview = preview_replacement(
         job.id, job.name, job.schedule, job.schedule_expr, str(script_path)
     )
@@ -254,9 +270,11 @@ def cmd_replace(args):
         str(script_path), "manual",
     )
     print(color(f"Replacement recorded. Status: {replacement.status}", GREEN))
-    print(f"\nTo complete the replacement manually:")
-    print(f"  1. Create new cron: openclaw cron add (with the script command)")
-    print(f"  2. Disable original: openclaw cron update {job.id} --disable")
+    print("\nTo complete the replacement manually:")
+    print("  Add this line to your crontab (run: crontab -e)")
+    print(f"  {spec['crontab_entry']}")
+    print("  Disable the original OpenClaw job")
+    print(f"  {spec['disable_command']}")
     return 0
 
 
@@ -371,6 +389,7 @@ def main():
     p_convert.add_argument("job_id", nargs="?", help="Job ID or name to convert")
     p_convert.add_argument("--all", action="store_true", help="Convert all mechanical jobs")
     p_convert.add_argument("--dry-run", action="store_true", help="Preview without generating")
+    p_convert.add_argument("--strict", action="store_true", help="Require full output channel configuration")
     p_convert.set_defaults(func=cmd_convert)
 
     # replace
@@ -378,6 +397,7 @@ def main():
     p_replace.add_argument("job_id", help="Job ID to replace")
     p_replace.add_argument("--dry-run", action="store_true", help="Preview without replacing")
     p_replace.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
+    p_replace.add_argument("--strict", action="store_true", help="Require full output channel configuration")
     p_replace.set_defaults(func=cmd_replace)
 
     # list

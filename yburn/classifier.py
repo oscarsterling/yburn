@@ -28,7 +28,7 @@ STRONG_MECHANICAL = {
     "rotate", "prune", "archive", "kill", "restart", "vacuum", "verify",
     "diagnostic", "diagnostics", "snapshot", "rollback", "reindex",
     "sync", "deploy", "terminate", "compress", "heartbeat", "spawn",
-    "fetch", "validate", "build", "script",
+    "fetch", "validate", "build", "script", "poll", "watch", "purge", "flush",
 }
 WEAK_MECHANICAL = {
     "count", "list", "report", "disk", "uptime", "memory", "git", "push",
@@ -36,14 +36,14 @@ WEAK_MECHANICAL = {
     "index", "sweep", "flag", "clean", "reset", "size", "maintenance",
     "alert", "notify", "send", "port", "firewall", "process", "pid",
     "configure", "queue", "load", "parse", "lock", "unlock", "scan",
-    "collect", "download", "upload", "trigger", "retry",
+    "collect", "download", "upload", "trigger", "retry", "daily", "run", "job",
 }
 STRONG_REASONING = {
     "analyze", "recommend", "draft", "write", "evaluate", "decide",
     "strategy", "synthesize", "create", "compose", "research", "advise",
     "reflect", "propose", "generate", "counsel", "creative",
     "interpret", "brainstorm", "optimize", "forecast", "predict",
-    "assess", "critique", "strategize", "insights",
+    "assess", "critique", "strategize", "insights", "plan", "coach",
 }
 WEAK_REASONING = {
     "review", "summarize", "compare", "prioritize", "brief", "morning",
@@ -52,7 +52,7 @@ WEAK_REASONING = {
     "self-improvement", "debrief", "agenda", "pipeline", "content",
     "publish", "newsletter", "blog", "tweet", "engagement",
     "outline", "explore", "curate", "ideate", "detect", "facilitate",
-    "imagine",
+    "imagine", "update",
 }
 
 # Shell command patterns that indicate mechanical work
@@ -138,6 +138,9 @@ def classify_job(job: CronJob, threshold: int = 3) -> ClassificationResult:
     elif "opus" in model_lower:
         reasoning_score += 1
         signals.append("heuristic:opus_model(+1)")
+        if reasoning_score > mechanical_score:
+            reasoning_score += 1
+            signals.append("heuristic:opus_reasoning_bias(+1)")
 
     # Heuristic: systemEvent with simple commands is likely mechanical
     if job.payload_kind == "systemEvent":

@@ -21,6 +21,22 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 SCRIPTS_DIR = Path.home() / ".yburn" / "scripts"
 
 
+def check_output_config() -> Tuple[bool, List[str]]:
+    """Validate optional output channel environment configuration."""
+    token_set = bool(os.environ.get("YBURN_TELEGRAM_TOKEN"))
+    chat_id_set = bool(os.environ.get("YBURN_TELEGRAM_CHAT_ID"))
+    warnings = []
+
+    if not token_set and not chat_id_set:
+        warnings.append("No output channel configured - script will output to stdout only")
+    elif token_set and not chat_id_set:
+        warnings.append("Missing YBURN_TELEGRAM_CHAT_ID - script will output to stdout only")
+    elif chat_id_set and not token_set:
+        warnings.append("Missing YBURN_TELEGRAM_TOKEN - script will output to stdout only")
+
+    return token_set and chat_id_set, warnings
+
+
 @dataclass
 class TemplateManifest:
     """Parsed template manifest."""

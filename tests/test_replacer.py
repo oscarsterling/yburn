@@ -33,16 +33,46 @@ class TestBuildReplacementCommand:
             "job-123", "My Job", {"kind": "cron", "expr": "0 * * * *"},
             "/path/to/script.py"
         )
-        assert spec["name"] == "[yburn] My Job"
-        assert spec["schedule"]["expr"] == "0 * * * *"
-        assert "python3 /path/to/script.py" in spec["payload"]["message"]
-        assert spec["payload"]["model"] == "haiku"
-        assert spec["sessionTarget"] == "isolated"
+        assert spec["crontab_entry"] == (
+            "0 * * * * python3 /path/to/script.py >> ~/.yburn/logs/my-job.log 2>&1"
+        )
+        assert spec["disable_command"] == "openclaw cron update job-123 --disable"
+        assert spec["original_job_id"] == "job-123"
+        assert spec["script_path"] == "/path/to/script.py"
 
-    def test_preserves_schedule(self):
-        schedule = {"kind": "cron", "expr": "30 22 * * *", "tz": "America/New_York"}
-        spec = build_replacement_command("id", "name", schedule, "/script.py")
-        assert spec["schedule"] == schedule
+    def test_every_schedule_hourly(self):
+        spec = build_replacement_command(
+            "id", "name", {"kind": "every", "everyMs": 3600000}, "/script.py"
+        )
+        assert spec["crontab_entry"].startswith("0 * * * * python3 /script.py")
+
+    def test_every_schedule_half_hour(self):
+        spec = build_replacement_command(
+            "id", "name", {"kind": "every", "everyMs": 1800000}, "/script.py"
+        )
+        assert spec["crontab_entry"].startswith("*/30 * * * * python3 /script.py")
+
+    def test_every_schedule_daily(self):
+        spec = build_replacement_command(
+            "id", "name", {"kind": "every", "everyMs": 86400000}, "/script.py"
+        )
+        assert spec["crontab_entry"].startswith("0 0 * * * python3 /script.py")
+
+    def test_every_schedule_five_minutes(self):
+        spec = build_replacement_command(
+            "id", "name", {"kind": "every", "everyMs": 300000}, "/script.py"
+        )
+        assert spec["crontab_entry"].startswith("*/5 * * * * python3 /script.py")
+
+    def test_at_schedule_outputs_manual_comment(self):
+        spec = build_replacement_command(
+            "id", "name", {"kind": "at", "at": "2026-03-30T10:00:00Z"}, "/script.py"
+        )
+        assert spec["crontab_entry"] == "# one-time job - set up manually"
+
+    def test_unknown_schedule_defaults_hourly(self):
+        spec = build_replacement_command("id", "name", {"kind": "weird"}, "/script.py")
+        assert spec["crontab_entry"].startswith("0 * * * * python3 /script.py")
 
 
 class TestPreviewReplacement:
@@ -56,8 +86,9 @@ class TestPreviewReplacement:
         assert "My Health Check" in preview
         assert "job-123" in preview
         assert "DISABLED" in preview
-        assert "[yburn]" in preview
-        assert "haiku" in preview
+        assert "crontab" in preview.lower()
+        assert "python3 /home/user/.yburn/scripts/my-health-check.py" in preview
+        assert "openclaw cron update job-123 --disable" in preview
         assert "rollback" in preview.lower()
 
 

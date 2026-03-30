@@ -129,10 +129,19 @@ def check_cpu() -> CheckResult:
     """CPU usage via top (macOS) or /proc/stat (Linux)."""
     try:
         if platform.system() == "Darwin":
-            out = subprocess.check_output(
-                ["top", "-l", "1", "-n", "0", "-stats", "cpu"],
-                text=True, timeout=10, stderr=subprocess.DEVNULL,
-            )
+            try:
+                out = subprocess.check_output(
+                    ["top", "-l", "1", "-n", "0", "-stats", "cpu"],
+                    text=True, timeout=10, stderr=subprocess.DEVNULL,
+                )
+            except OSError as exc:
+                if getattr(exc, "errno", None) != 1:
+                    raise
+                cores = os.cpu_count() or 1
+                load1 = os.getloadavg()[0]
+                used = round(min(100.0, (load1 / max(cores, 1)) * 100), 1)
+                status = WARN if used > 90 else OK
+                return CheckResult("cpu", status, f"CPU: {used}% ({cores} cores) [fallback]")
             for line in out.splitlines():
                 if "CPU usage" in line:
                     # "CPU usage: 5.26% user, 10.0% sys, 84.73% idle"
