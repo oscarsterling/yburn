@@ -9,6 +9,7 @@ import pytest
 
 from yburn.replacer import (
     Replacement,
+    _schedule_to_crontab,
     build_replacement_command,
     get_active_replacements,
     get_replacement_for_job,
@@ -73,6 +74,20 @@ class TestBuildReplacementCommand:
     def test_unknown_schedule_defaults_hourly(self):
         spec = build_replacement_command("id", "name", {"kind": "weird"}, "/script.py")
         assert spec["crontab_entry"].startswith("0 * * * * python3 /script.py")
+
+
+class TestScheduleToCrontab:
+    def test_zero_every_ms_defaults_hourly(self):
+        assert _schedule_to_crontab({"kind": "every", "everyMs": 0}) == "0 * * * *"
+
+    def test_negative_every_ms_defaults_hourly(self):
+        assert _schedule_to_crontab({"kind": "every", "everyMs": -60000}) == "0 * * * *"
+
+    def test_non_integer_string_every_ms_defaults_hourly(self):
+        assert _schedule_to_crontab({"kind": "every", "everyMs": "60000"}) == "0 * * * *"
+
+    def test_float_every_ms_rounds_to_minutes(self):
+        assert _schedule_to_crontab({"kind": "every", "everyMs": 90000.5}) == "*/2 * * * *"
 
 
 class TestPreviewReplacement:

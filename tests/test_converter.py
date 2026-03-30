@@ -1,5 +1,6 @@
 """Tests for the yburn converter."""
 
+import importlib.util
 import json
 import os
 import tempfile
@@ -66,7 +67,7 @@ def find_job(jobs, name_fragment):
 
 class TestLoadTemplates:
     def test_loads_all_templates(self, templates):
-        assert len(templates) == 5
+        assert len(templates) == 10
 
     def test_template_names(self, templates):
         names = {t.name for t in templates}
@@ -75,6 +76,11 @@ class TestLoadTemplates:
         assert "git-backup-status" in names
         assert "api-endpoint-check" in names
         assert "file-watcher" in names
+        assert "session-cleanup" in names
+        assert "oauth-health-check" in names
+        assert "db-maintenance-status" in names
+        assert "ssl-cert-expiry" in names
+        assert "log-scanner" in names
 
     def test_template_has_keywords(self, templates):
         for t in templates:
@@ -84,6 +90,18 @@ class TestLoadTemplates:
         for t in templates:
             assert t.path.exists()
             assert (t.path / "script.py").exists()
+
+    def test_session_cleanup_template_imports_with_expected_config(self):
+        script_path = TEMPLATES_DIR / "session-cleanup" / "script.py"
+        spec = importlib.util.spec_from_file_location("session_cleanup_template", script_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+
+        assert hasattr(module, "CONFIG")
+        assert module.CONFIG["max_session_age_hours"] == 2
+        assert module.CONFIG["dry_run"] is True
+        assert module.CONFIG["exclude_session_labels"] == []
 
 
 # --- TestMatchJobToTemplate ---
@@ -290,6 +308,17 @@ class TestCheckOutputConfig:
     def test_both_vars_set(self, monkeypatch):
         monkeypatch.setenv("YBURN_TELEGRAM_TOKEN", "token")
         monkeypatch.setenv("YBURN_TELEGRAM_CHAT_ID", "123")
+
+        configured, warnings = check_output_config()
+
+        assert configured is True
+        assert warnings == []
+
+    def test_discord_webhook_counts_as_configured(self, monkeypatch):
+        monkeypatch.delenv("YBURN_TELEGRAM_TOKEN", raising=False)
+        monkeypatch.delenv("YBURN_TELEGRAM_CHAT_ID", raising=False)
+        monkeypatch.setenv("YBURN_DISCORD_WEBHOOK", "https://discord.example/webhook")
+        monkeypatch.delenv("YBURN_SLACK_WEBHOOK", raising=False)
 
         configured, warnings = check_output_config()
 
