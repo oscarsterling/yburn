@@ -17,6 +17,7 @@ from yburn.converter import (
     load_templates,
     match_job_to_template,
     preview_conversion,
+    script_path_for_job,
     _apply_config_overrides,
     TEMPLATES_DIR,
 )
@@ -275,6 +276,22 @@ class TestGenerateScript:
         result = generate_script(job, fake_template)
         assert not result.success
         assert "not found" in result.error
+
+    def test_refuses_duplicate_script(self, templates):
+        job = make_job(name="Duplicate Check", payload_text="health")
+        template = [t for t in templates if t.name == "system-diagnostics"][0]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            first = generate_script(job, template, output_dir=Path(tmpdir))
+            second = generate_script(job, template, output_dir=Path(tmpdir))
+            assert first.success is True
+            assert second.success is False
+            assert "already exists" in second.error
+
+    def test_script_path_for_job_sanitizes_name(self):
+        job = make_job(name="Nightly Backup + Git Commit")
+        path = script_path_for_job(job, Path("/tmp/yburn"))
+        assert path.name == "nightly-backup---git-commit.py"
 
 
 class TestCheckOutputConfig:

@@ -21,6 +21,14 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 SCRIPTS_DIR = Path.home() / ".yburn" / "scripts"
 
 
+def get_scripts_dir() -> Path:
+    """Return the configured scripts output directory."""
+    override = os.environ.get("YBURN_SCRIPTS_DIR")
+    if override:
+        return Path(override).expanduser()
+    return SCRIPTS_DIR
+
+
 def check_output_config() -> Tuple[bool, List[str]]:
     """Validate optional output channel environment configuration."""
     token_set = bool(os.environ.get("YBURN_TELEGRAM_TOKEN"))
@@ -73,6 +81,13 @@ class ConversionResult:
     script_content: str
     success: bool
     error: Optional[str] = None
+
+
+def script_path_for_job(job: CronJob, output_dir: Optional[Path] = None) -> Path:
+    """Return the generated script path for a job."""
+    out_dir = output_dir or get_scripts_dir()
+    safe_name = re.sub(r'[^a-z0-9_-]', '-', job.name.lower())
+    return out_dir / f"{safe_name}.py"
 
 
 def load_templates(templates_dir: Optional[Path] = None) -> List[TemplateManifest]:
@@ -239,9 +254,15 @@ def generate_script(
     script_content = header + script_content
 
     # Determine output path
-    out_dir = output_dir or SCRIPTS_DIR
-    safe_name = re.sub(r'[^a-z0-9_-]', '-', job.name.lower())
-    out_path = out_dir / f"{safe_name}.py"
+    out_dir = output_dir or get_scripts_dir()
+    out_path = script_path_for_job(job, out_dir)
+
+    if out_path.exists():
+        return ConversionResult(
+            job=job, template=template, script_path=out_path,
+            script_content=script_content, success=False,
+            error=f"Script already exists: {out_path}",
+        )
 
     # Write the script
     try:

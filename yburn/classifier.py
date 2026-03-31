@@ -6,9 +6,9 @@ weighted keyword scoring. Zero API calls - pure pattern matching.
 
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from yburn.scanner import CronJob
 
@@ -178,7 +178,7 @@ def classify_job(job: CronJob, threshold: int = 3) -> ClassificationResult:
 
 
 def classify_jobs(
-    jobs: List[CronJob], threshold: int = 3
+    jobs: List[CronJob], threshold: int = 3, overrides: Optional[Dict[str, str]] = None
 ) -> List[Tuple[CronJob, ClassificationResult]]:
     """Classify a list of cron jobs.
 
@@ -192,6 +192,9 @@ def classify_jobs(
     results = []
     for job in jobs:
         result = classify_job(job, threshold)
+        override = _get_override(job, overrides)
+        if override:
+            result = apply_manual_override(result, override)
         results.append((job, result))
         logger.debug(
             "Job '%s': %s (mech=%d, reason=%d)",
@@ -199,6 +202,48 @@ def classify_jobs(
             result.mechanical_score, result.reasoning_score,
         )
     return results
+
+
+def _get_override(job: CronJob, overrides: Optional[Dict[str, str]]) -> Optional[str]:
+    """Find a manual override for a job by ID or normalized name."""
+    if not overrides:
+        return None
+
+    name_key = f"name:{job.name.strip().lower()}"
+    if job.id in overrides:
+        return overrides[job.id]
+    if name_key in overrides:
+        return overrides[name_key]
+    return None
+
+
+def apply_manual_override(
+    result: ClassificationResult,
+    decision: str,
+) -> ClassificationResult:
+    """Apply a human classification override to a classifier result."""
+    normalized = decision.strip().lower()
+    if normalized == "mechanical":
+        classification = Classification.MECHANICAL
+        confidence = 1.0
+    elif normalized == "reasoning":
+        classification = Classification.REASONING
+        confidence = 1.0
+    elif normalized == "skip":
+        classification = Classification.UNSURE
+        confidence = result.confidence
+    else:
+        return result
+
+    signals = list(result.signals_found)
+    signals.append(f"manual:{normalized}")
+    return ClassificationResult(
+        classification=classification,
+        mechanical_score=result.mechanical_score,
+        reasoning_score=result.reasoning_score,
+        confidence=confidence,
+        signals_found=signals,
+    )
 
 
 def print_summary(results: List[Tuple[CronJob, ClassificationResult]]) -> str:

@@ -8,6 +8,7 @@ import pytest
 from yburn.classifier import (
     Classification,
     ClassificationResult,
+    apply_manual_override,
     classify_job,
     classify_jobs,
     print_summary,
@@ -165,6 +166,27 @@ class TestClassificationLogic:
         job = make_job(payload_text="check")
         result = classify_job(job, threshold=0)
         assert result.classification == Classification.MECHANICAL
+
+    def test_manual_override_changes_classification(self):
+        job = make_job(payload_text="analyze trends and recommend strategy")
+        results = classify_jobs([job], overrides={"test-id": "mechanical"})
+        _, result = results[0]
+        assert result.classification == Classification.MECHANICAL
+        assert result.confidence == 1.0
+        assert "manual:mechanical" in result.signals_found
+
+    def test_manual_skip_keeps_job_unsure(self):
+        result = ClassificationResult(
+            classification=Classification.MECHANICAL,
+            mechanical_score=4,
+            reasoning_score=1,
+            confidence=0.75,
+            signals_found=["mechanical:check(+2)"],
+        )
+        updated = apply_manual_override(result, "skip")
+        assert updated.classification == Classification.UNSURE
+        assert updated.confidence == 0.75
+        assert "manual:skip" in updated.signals_found
 
 
 # --- TestHeuristics ---
