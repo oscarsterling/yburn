@@ -18,3 +18,4 @@ env/
 .coverage
 htmlcov/
 .DS_Store
+.yburn-sandbox/
