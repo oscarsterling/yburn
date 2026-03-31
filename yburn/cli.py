@@ -235,6 +235,7 @@ def cmd_audit(args):
             print(f"    Score: mech={result.mechanical_score} reason={result.reasoning_score}")
             signals = ", ".join(result.signals_found[:5])
             print(f"    Signals: {signals}")
+        print(color("  Tip: run 'yburn audit --interactive' to classify these one by one", BLUE))
         print()
 
     if reasoning and args.verbose:
@@ -333,6 +334,7 @@ def _convert_single(job, templates, config, dry_run=False, strict=False):
     result = generate_script(job, match.template)
     if result.success:
         print(color(f"  Generated: {result.script_path}", GREEN))
+        print(color(f"  Tip: run 'yburn test {job.name}' to verify output before replacing", BLUE))
         return 0
     else:
         print(color(f"  Failed: {result.error}", RED))

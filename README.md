@@ -1,12 +1,13 @@
 # yburn
 
 **Why burn tokens on tasks that don't think?**
+Your cron jobs should not depend on an API being up.
 
 Audit your AI agent cron jobs, identify the ones that never needed an LLM, and replace them with local scripts that run in under a second and cost nothing. Plus standalone health monitoring tools that work on any machine.
 
 ![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tests](https://img.shields.io/badge/tests-252%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-277%20passing-brightgreen)
 
 ```bash
 pip install yburn
@@ -33,13 +34,15 @@ yburn-watch https://yoursite.com https://api.yoursite.com/health
 
 That's it. Three commands. Zero configuration needed.
 
+yburn generates standalone Python scripts that run directly on your machine - no LLM, no API calls, zero tokens. Telegram, Discord, and Slack are optional notification channels. By default, scripts print to stdout. Configure them later or never - the scripts work either way.
+
 ---
 
 ## The Problem
 
-Real numbers from a live 97-cron OpenClaw deployment (March 2026):
+Real numbers from a live 98-cron OpenClaw deployment (March 2026):
 
-- **51 of 97 crons (53%) were mechanical** - the LLM was doing nothing a shell script couldn't do faster
+- **57 of 98 crons (58%) were mechanical** - the LLM was doing nothing a shell script couldn't do faster
 - **~30 seconds per LLM cron** drops to **under 1 second** with a local script
 - Common culprits: system health checks, DB maintenance, git backups, cron audits, uptime monitoring
 
@@ -371,4 +374,4 @@ MIT. See `LICENSE`.
 
 ---
 
-*Built because 53% of our cron jobs were burning tokens on work that doesn't think.*
+*Built because 58% of our cron jobs were burning tokens on work that doesn't think.*

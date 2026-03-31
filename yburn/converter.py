@@ -40,7 +40,11 @@ def check_output_config() -> Tuple[bool, List[str]]:
     output_configured = (token_set and chat_id_set) or discord_set or slack_set
 
     if not output_configured and not token_set and not chat_id_set:
-        warnings.append("No output channel configured - script will output to stdout only")
+        warnings.append(
+            "No notification channel configured - script will print to stdout. "
+            "To add Telegram alerts, set YBURN_TELEGRAM_TOKEN and YBURN_TELEGRAM_CHAT_ID. "
+            "(This is optional - scripts work without it.)"
+        )
     elif token_set and not chat_id_set:
         warnings.append("Missing YBURN_TELEGRAM_CHAT_ID - script will output to stdout only")
     elif chat_id_set and not token_set:

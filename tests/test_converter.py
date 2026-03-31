@@ -302,7 +302,11 @@ class TestCheckOutputConfig:
         configured, warnings = check_output_config()
 
         assert configured is False
-        assert warnings == ["No output channel configured - script will output to stdout only"]
+        assert warnings == [
+            "No notification channel configured - script will print to stdout. "
+            "To add Telegram alerts, set YBURN_TELEGRAM_TOKEN and YBURN_TELEGRAM_CHAT_ID. "
+            "(This is optional - scripts work without it.)"
+        ]
 
     def test_missing_chat_id_only(self, monkeypatch):
         monkeypatch.setenv("YBURN_TELEGRAM_TOKEN", "token")

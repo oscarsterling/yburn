@@ -128,7 +128,7 @@ class ConversionReport:
             "sessions_eliminated_per_day": round(per_day, 2),
             "sessions_eliminated_per_week": round(per_day * 7, 2),
             "sessions_eliminated_per_month": round(per_day * 30, 2),
-            "speed_improvement": "about 30s -> <1s per converted run",
+            "speed_improvement": "30s -> under 1s per converted run",
         }
 
         return {
@@ -289,11 +289,13 @@ class ConversionReport:
 
     def _format_token_savings(self, prefix: str = "") -> List[str]:
         estimate = self.summary()["token_savings_estimate"]
+        daily = round(estimate["sessions_eliminated_per_day"])
+        monthly = round(estimate["sessions_eliminated_per_month"])
         return [
-            f"{prefix}Sessions eliminated per day: {estimate['sessions_eliminated_per_day']}",
-            f"{prefix}Sessions eliminated per week: {estimate['sessions_eliminated_per_week']}",
-            f"{prefix}Sessions eliminated per month: {estimate['sessions_eliminated_per_month']}",
-            f"{prefix}Speed improvement: {estimate['speed_improvement']}",
+            (
+                f"{prefix}~{monthly} LLM sessions eliminated per month "
+                f"({daily}/day) - Speed: {estimate['speed_improvement']}"
+            ),
         ]
 
     def _estimate_runs_per_day(self, schedule: str) -> float:
