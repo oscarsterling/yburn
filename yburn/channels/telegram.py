@@ -8,6 +8,7 @@ import json
 import logging
 import urllib.request
 import urllib.error
+from urllib.parse import urlsplit, urlunsplit
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,32 @@ class TelegramChannel:
             raise ValueError("Telegram chat_id is required")
         self.token = token
         self.chat_id = chat_id
-        self.base_url = f"https://api.telegram.org/bot{token}"
+        self.base_url = "https://api.telegram.org"
+
+    def _method_url(self, method: str) -> str:
+        """Build a Telegram API URL for a method without storing tokenized URLs."""
+        return f"{self.base_url}/bot{self.token}/{method}"
+
+    def _redact_url(self, value: str) -> str:
+        """Remove bot token from URLs before logging."""
+        if "/bot" not in value:
+            return value
+
+        parts = urlsplit(value)
+        marker = "/bot"
+        idx = parts.path.find(marker)
+        if idx == -1:
+            return value
+
+        remainder = parts.path[idx + len(marker):]
+        slash_idx = remainder.find("/")
+        if slash_idx == -1:
+            redacted_path = f"{parts.path[:idx]}{marker}<redacted>"
+        else:
+            redacted_path = (
+                f"{parts.path[:idx]}{marker}<redacted>{remainder[slash_idx:]}"
+            )
+        return urlunsplit(parts._replace(path=redacted_path))
 
     def send(self, message: str, parse_mode: str = "Markdown") -> bool:
         """Send a message, splitting if necessary.
@@ -83,7 +109,7 @@ class TelegramChannel:
             payload["parse_mode"] = parse_mode
 
         data = json.dumps(payload).encode("utf-8")
-        url = f"{self.base_url}/sendMessage"
+        url = self._method_url("sendMessage")
         req = urllib.request.Request(
             url, data=data,
             headers={"Content-Type": "application/json"},
@@ -103,10 +129,13 @@ class TelegramChannel:
             logger.error("Telegram HTTP error %d: %s", e.code, body[:200])
             return False
         except urllib.error.URLError as e:
-            logger.error("Telegram connection error: %s", e.reason)
+            reason = e.reason
+            if isinstance(reason, str):
+                reason = self._redact_url(reason)
+            logger.error("Telegram connection error: %s", reason)
             return False
         except Exception as e:
-            logger.error("Telegram send error: %s", e)
+            logger.error("Telegram send error: %s", self._redact_url(str(e)))
             return False
 
     def _split_message(self, message: str) -> List[str]:
@@ -159,7 +188,7 @@ class TelegramChannel:
         Returns:
             True if the bot can reach the chat.
         """
-        url = f"{self.base_url}/getMe"
+        url = self._method_url("getMe")
         try:
             resp = urllib.request.urlopen(url, timeout=10)
             result = json.loads(resp.read().decode())
@@ -169,5 +198,8 @@ class TelegramChannel:
                 return True
             return False
         except Exception as e:
-            logger.error("Telegram connection test failed: %s", e)
+            logger.error(
+                "Telegram connection test failed: %s",
+                self._redact_url(str(e)),
+            )
             return False

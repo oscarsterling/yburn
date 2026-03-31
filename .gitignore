@@ -19,3 +19,5 @@ env/
 htmlcov/
 .DS_Store
 .yburn-sandbox/
+yburn.yaml
+.yburn/

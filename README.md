@@ -289,6 +289,31 @@ Custom templates go in `~/.yburn/templates/`. See `yburn/templates/TEMPLATE_SPEC
 
 ---
 
+## What Converts Well (and What Doesnt)
+
+**Converts cleanly:**
+
+- System health checks (disk, CPU, memory, uptime)
+- DB maintenance and size monitoring
+- Git backup status and commit checks
+- Endpoint and SSL cert monitoring
+- OAuth token health checks
+- Log file scanning
+- File change detection
+- Cron health reports
+
+**Struggles with:**
+
+- Jobs that call external APIs with variable or stateful output
+- Jobs that need OpenClaw session context to function
+- Jobs with reasoning, decision-making, or natural language in the payload
+- Jobs that write back to OpenClaw memory or state files
+- Anything where "if the output looks wrong, think about it" is the job
+
+If your job is doing any of the second list, keep it as an LLM cron. That is what LLMs are for.
+
+---
+
 ## Supported Platforms
 
 | Platform | Status |
