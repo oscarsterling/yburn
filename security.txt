@@ -1,0 +1,7 @@
+# Security Policy for yburn
+# https://pypi.org/project/yburn/
+
+Contact: https://github.com/oscarsterling/yburn/security/advisories/new
+Preferred-Languages: en
+Policy: https://github.com/oscarsterling/yburn/blob/main/SECURITY.md
+Expires: 2027-04-03T00:00:00.000Z
