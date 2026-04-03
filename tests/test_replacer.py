@@ -153,8 +153,11 @@ class TestReplacementTracking:
 
     def test_rollback(self, temp_state_dir):
         record_replacement("job-1", "Test", {}, "/s.py", "tmpl")
-        result = rollback_replacement("job-1")
-        assert result["success"] is False  # openclaw not available in test
+        with patch("yburn.replacer.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stderr = ""
+            result = rollback_replacement("job-1")
+        assert result["success"] is True
         assert any("rolled_back" in a for a in result["actions"])
         loaded = load_replacements()
         assert loaded[0].status == "rolled_back"
@@ -167,7 +170,10 @@ class TestReplacementTracking:
     def test_get_active_replacements(self, temp_state_dir):
         record_replacement("job-1", "Test 1", {}, "/s1.py", "tmpl")
         record_replacement("job-2", "Test 2", {}, "/s2.py", "tmpl")
-        rollback_replacement("job-1")
+        with patch("yburn.replacer.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stderr = ""
+            rollback_replacement("job-1")
 
         active = get_active_replacements()
         assert len(active) == 1
@@ -185,7 +191,10 @@ class TestReplacementTracking:
 
     def test_rolled_back_not_returned(self, temp_state_dir):
         record_replacement("job-1", "Test", {}, "/s.py", "tmpl")
-        rollback_replacement("job-1")
+        with patch("yburn.replacer.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stderr = ""
+            rollback_replacement("job-1")
         r = get_replacement_for_job("job-1")
         assert r is None
 
@@ -263,8 +272,11 @@ class TestReplacementTracking:
         active = get_active_replacements()
         assert len(active) == 2
 
-        for r in active:
-            rollback_replacement(r.original_job_id)
+        with patch("yburn.replacer.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stderr = ""
+            for r in active:
+                rollback_replacement(r.original_job_id)
 
         assert len(get_active_replacements()) == 0
         loaded = load_replacements()

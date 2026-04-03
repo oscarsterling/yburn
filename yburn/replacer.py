@@ -313,12 +313,13 @@ def rollback_replacement(original_job_id: str) -> dict:
         except subprocess.TimeoutExpired:
             result["errors"].append(f"Timeout disabling {target.new_cron_id}")
 
-    # Update tracking state
-    target.status = "rolled_back"
-    save_replacements(replacements)
-    result["actions"].append(f"Marked {target.original_job_name} as rolled_back")
+    # Update tracking state only on success
+    if len(result["errors"]) == 0:
+        target.status = "rolled_back"
+        save_replacements(replacements)
+        result["actions"].append(f"Marked {target.original_job_name} as rolled_back")
+        logger.info("Rolled back replacement for %s", target.original_job_name)
     result["success"] = len(result["errors"]) == 0
-    logger.info("Rolled back replacement for %s", target.original_job_name)
 
     return result
 

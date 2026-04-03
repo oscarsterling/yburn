@@ -97,7 +97,7 @@ class TestReportCommand:
 
 class TestReplaceDryRunDefault:
     def test_replace_dry_run_by_default(self, monkeypatch, tmp_path, capsys):
-        """replace shows preview and exits without --confirm."""
+        """replace shows preview and exits without --execute."""
         job = make_job(name="Test Job", job_id="job-1")
         script_path = tmp_path / "test-job.py"
         script_path.write_text("print('hello')")
@@ -106,16 +106,16 @@ class TestReplaceDryRunDefault:
         monkeypatch.setattr("yburn.cli.get_replacement_for_job", lambda jid: None)
         monkeypatch.setattr("yburn.converter.SCRIPTS_DIR", tmp_path)
 
-        args = Namespace(job_id="job-1", confirm=False, yes=False, strict=False)
+        args = Namespace(job_id="job-1", execute=False, yes=False, strict=False)
         code = cmd_replace(args)
 
         assert code == 0
         out = capsys.readouterr().out
         assert "DRY RUN" in out
-        assert "--confirm" in out
+        assert "--execute" in out
 
-    def test_replace_with_confirm_records(self, monkeypatch, tmp_path, capsys):
-        """replace --confirm actually records the replacement."""
+    def test_replace_with_execute_records(self, monkeypatch, tmp_path, capsys):
+        """replace --execute actually records the replacement."""
         job = make_job(name="Test Job", job_id="job-1")
         script_path = tmp_path / "test-job.py"
         script_path.write_text("print('hello')")
@@ -125,7 +125,6 @@ class TestReplaceDryRunDefault:
         monkeypatch.setattr("yburn.converter.SCRIPTS_DIR", tmp_path)
 
         recorded = []
-        original_record = record_replacement
         def fake_record(*a, **kw):
             from yburn.replacer import Replacement
             r = Replacement(
@@ -137,7 +136,7 @@ class TestReplaceDryRunDefault:
             return r
         monkeypatch.setattr("yburn.cli.record_replacement", fake_record)
 
-        args = Namespace(job_id="job-1", confirm=True, yes=True, strict=False)
+        args = Namespace(job_id="job-1", execute=True, yes=True, strict=False)
         code = cmd_replace(args)
 
         assert code == 0
@@ -156,7 +155,7 @@ class TestRollbackAll:
             with patch("yburn.replacer.subprocess.run") as mock_run:
                 mock_run.return_value.returncode = 0
                 mock_run.return_value.stderr = ""
-                args = Namespace(job_id=None, all=True)
+                args = Namespace(job_id=None, all=True, yes=True)
                 code = cmd_rollback(args)
 
             assert code == 0
@@ -168,7 +167,7 @@ class TestRollbackAll:
     def test_rollback_all_empty(self, monkeypatch, tmp_path, capsys):
         """rollback --all with no active replacements."""
         with patch("yburn.replacer.STATE_DIR", tmp_path):
-            args = Namespace(job_id=None, all=True)
+            args = Namespace(job_id=None, all=True, yes=True)
             code = cmd_rollback(args)
             assert code == 0
             assert "No active replacements" in capsys.readouterr().out

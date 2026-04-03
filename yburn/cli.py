@@ -385,8 +385,6 @@ def cmd_report(args):
 
 def cmd_replace(args):
     """Replace an original cron with a script-based cron."""
-    from dataclasses import asdict
-
     configured, warnings = check_output_config()
     for warning in warnings:
         print(color(f"Warning: {warning}", YELLOW))
@@ -430,8 +428,8 @@ def cmd_replace(args):
     )
     print(preview)
 
-    if not args.confirm:
-        print(color("[DRY RUN - pass --confirm to execute]", BLUE))
+    if not args.execute:
+        print(color("[DRY RUN - pass --execute to apply changes]", BLUE))
         return 0
 
     # Confirm
@@ -441,8 +439,15 @@ def cmd_replace(args):
             print("Cancelled.")
             return 0
 
-    # Capture original payload before replacement
-    original_payload = asdict(job)
+    # Capture original payload before replacement (safe fields only)
+    original_payload = {
+        "id": job.id,
+        "name": job.name,
+        "schedule": job.schedule,
+        "schedule_expr": job.schedule_expr,
+        "enabled": job.enabled,
+        "classification": getattr(job, "classification", None),
+    }
 
     # Record the replacement (actual cron creation/disabling done via openclaw)
     replacement = record_replacement(
@@ -543,6 +548,12 @@ def cmd_rollback(args):
             print(color("No active replacements to roll back.", YELLOW))
             return 0
 
+        if not args.yes:
+            resp = input(f"Roll back {len(active)} replacement(s)? [y/N] ")
+            if resp.lower() not in ("y", "yes"):
+                print("Cancelled.")
+                return 0
+
         print(f"Rolling back {len(active)} replacement(s)...\n")
         any_failed = False
         for r in active:
@@ -616,7 +627,7 @@ def main():
     # replace
     p_replace = subparsers.add_parser("replace", help="Replace original cron with script-based cron")
     p_replace.add_argument("job_id", help="Job ID to replace")
-    p_replace.add_argument("--confirm", action="store_true", help="Actually execute the replacement (default is dry-run)")
+    p_replace.add_argument("--execute", action="store_true", help="Actually execute the replacement (default is dry-run)")
     p_replace.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
     p_replace.add_argument("--strict", action="store_true", help="Require full output channel configuration")
     p_replace.set_defaults(func=cmd_replace)
@@ -634,6 +645,7 @@ def main():
     p_rollback = subparsers.add_parser("rollback", help="Undo a replacement")
     p_rollback.add_argument("job_id", nargs="?", help="Original job ID to rollback")
     p_rollback.add_argument("--all", action="store_true", help="Roll back all active replacements")
+    p_rollback.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
     p_rollback.set_defaults(func=cmd_rollback)
 
     # version
