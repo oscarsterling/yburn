@@ -6,6 +6,7 @@ disabling originals, tracking replacements, and rollback.
 
 import json
 import logging
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,8 @@ class Replacement:
     replaced_at: str
     status: str  # "active", "rolled_back"
     new_cron_id: Optional[str] = None
+    original_payload: Optional[dict] = None
+    original_enabled: bool = True
 
 
 def load_replacements() -> List[Replacement]:
@@ -38,7 +41,21 @@ def load_replacements() -> List[Replacement]:
     try:
         with open(state_path) as f:
             data = json.load(f)
-        return [Replacement(**r) for r in data]
+        replacements = []
+        for r in data:
+            replacements.append(Replacement(
+                original_job_id=r["original_job_id"],
+                original_job_name=r["original_job_name"],
+                original_schedule=r["original_schedule"],
+                script_path=r["script_path"],
+                template_name=r["template_name"],
+                replaced_at=r["replaced_at"],
+                status=r["status"],
+                new_cron_id=r.get("new_cron_id"),
+                original_payload=r.get("original_payload"),
+                original_enabled=r.get("original_enabled", True),
+            ))
+        return replacements
     except Exception:
         logger.exception("Failed to load replacements")
         return []
@@ -50,7 +67,7 @@ def save_replacements(replacements: List[Replacement]) -> None:
     state_path = STATE_DIR / REPLACEMENTS_FILE
     data = []
     for r in replacements:
-        data.append({
+        entry = {
             "original_job_id": r.original_job_id,
             "original_job_name": r.original_job_name,
             "original_schedule": r.original_schedule,
@@ -59,7 +76,10 @@ def save_replacements(replacements: List[Replacement]) -> None:
             "replaced_at": r.replaced_at,
             "status": r.status,
             "new_cron_id": r.new_cron_id,
-        })
+            "original_payload": r.original_payload,
+            "original_enabled": r.original_enabled,
+        }
+        data.append(entry)
     with open(state_path, "w") as f:
         json.dump(data, f, indent=2)
     logger.info("Saved %d replacement records", len(data))
@@ -186,6 +206,8 @@ def record_replacement(
     script_path: str,
     template_name: str,
     new_cron_id: Optional[str] = None,
+    original_payload: Optional[dict] = None,
+    original_enabled: bool = True,
 ) -> Replacement:
     """Record a replacement in the tracking file.
 
@@ -196,6 +218,8 @@ def record_replacement(
         script_path: Path to the generated script.
         template_name: Name of the template used.
         new_cron_id: ID of the new cron job (if created).
+        original_payload: Full original job object as a dict.
+        original_enabled: Whether the original job was enabled.
 
     Returns:
         The recorded Replacement.
@@ -219,6 +243,8 @@ def record_replacement(
         replaced_at=datetime.now(timezone.utc).isoformat(),
         status="active",
         new_cron_id=new_cron_id,
+        original_payload=original_payload,
+        original_enabled=original_enabled,
     )
 
     replacements.append(replacement)
@@ -226,34 +252,75 @@ def record_replacement(
     return replacement
 
 
-def rollback_replacement(original_job_id: str) -> bool:
-    """Mark a replacement as rolled back.
-
-    This updates tracking state only. The actual cron enable/disable
-    operations need to happen via the CLI.
+def rollback_replacement(original_job_id: str) -> dict:
+    """Roll back a replacement: re-enable original cron, disable replacement cron.
 
     Args:
         original_job_id: ID of the original cron job.
 
     Returns:
-        True if a replacement was found and rolled back.
+        Dict with keys: success (bool), actions (list), errors (list).
+        Returns {"success": False, "actions": [], "errors": ["No active replacement found"]}
+        if no active replacement exists.
     """
     replacements = load_replacements()
-    found = False
+    result = {"success": False, "actions": [], "errors": []}
+    target = None
 
     for r in replacements:
         if r.original_job_id == original_job_id and r.status == "active":
-            r.status = "rolled_back"
-            found = True
-            logger.info("Rolled back replacement for %s", r.original_job_name)
+            target = r
             break
 
-    if found:
-        save_replacements(replacements)
-    else:
+    if not target:
         logger.warning("No active replacement found for %s", original_job_id)
+        result["errors"].append(f"No active replacement found for {original_job_id}")
+        return result
 
-    return found
+    # Re-enable original cron if it was enabled before
+    if target.original_enabled:
+        try:
+            proc = subprocess.run(
+                ["openclaw", "cron", "update", original_job_id, "--enable"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if proc.returncode == 0:
+                result["actions"].append(f"Re-enabled original cron {original_job_id}")
+            else:
+                result["errors"].append(
+                    f"Failed to re-enable {original_job_id}: {proc.stderr.strip()}"
+                )
+        except FileNotFoundError:
+            result["errors"].append("openclaw CLI not found")
+        except subprocess.TimeoutExpired:
+            result["errors"].append(f"Timeout re-enabling {original_job_id}")
+
+    # Disable yburn replacement cron if one exists
+    if target.new_cron_id:
+        try:
+            proc = subprocess.run(
+                ["openclaw", "cron", "update", target.new_cron_id, "--disable"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if proc.returncode == 0:
+                result["actions"].append(f"Disabled replacement cron {target.new_cron_id}")
+            else:
+                result["errors"].append(
+                    f"Failed to disable {target.new_cron_id}: {proc.stderr.strip()}"
+                )
+        except FileNotFoundError:
+            result["errors"].append("openclaw CLI not found")
+        except subprocess.TimeoutExpired:
+            result["errors"].append(f"Timeout disabling {target.new_cron_id}")
+
+    # Update tracking state
+    target.status = "rolled_back"
+    save_replacements(replacements)
+    result["actions"].append(f"Marked {target.original_job_name} as rolled_back")
+    result["success"] = len(result["errors"]) == 0
+    logger.info("Rolled back replacement for %s", target.original_job_name)
+
+    return result
 
 
 def get_active_replacements() -> List[Replacement]:

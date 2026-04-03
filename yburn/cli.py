@@ -385,6 +385,8 @@ def cmd_report(args):
 
 def cmd_replace(args):
     """Replace an original cron with a script-based cron."""
+    from dataclasses import asdict
+
     configured, warnings = check_output_config()
     for warning in warnings:
         print(color(f"Warning: {warning}", YELLOW))
@@ -428,8 +430,8 @@ def cmd_replace(args):
     )
     print(preview)
 
-    if args.dry_run:
-        print(color("[DRY RUN] Would replace but skipping.", BLUE))
+    if not args.confirm:
+        print(color("[DRY RUN - pass --confirm to execute]", BLUE))
         return 0
 
     # Confirm
@@ -439,10 +441,15 @@ def cmd_replace(args):
             print("Cancelled.")
             return 0
 
+    # Capture original payload before replacement
+    original_payload = asdict(job)
+
     # Record the replacement (actual cron creation/disabling done via openclaw)
     replacement = record_replacement(
         job.id, job.name, job.schedule,
         str(script_path), "manual",
+        original_payload=original_payload,
+        original_enabled=job.enabled,
     )
     print(color(f"Replacement recorded. Status: {replacement.status}", GREEN))
     print("\nTo complete the replacement manually:")
@@ -526,15 +533,44 @@ def cmd_test(args):
 
 def cmd_rollback(args):
     """Undo a replacement."""
-    success = rollback_replacement(args.job_id)
-    if success:
+    if not args.all and not args.job_id:
+        print(color("Specify a job ID or use --all to roll back all replacements.", RED))
+        return 1
+
+    if args.all:
+        active = get_active_replacements()
+        if not active:
+            print(color("No active replacements to roll back.", YELLOW))
+            return 0
+
+        print(f"Rolling back {len(active)} replacement(s)...\n")
+        any_failed = False
+        for r in active:
+            result = rollback_replacement(r.original_job_id)
+            status = color("OK", GREEN) if result["success"] else color("FAIL", RED)
+            actions = ", ".join(result["actions"]) if result["actions"] else "none"
+            print(f"  {r.original_job_name}: {status}")
+            print(f"    Actions: {actions}")
+            if result["errors"]:
+                any_failed = True
+                for err in result["errors"]:
+                    print(f"    Error: {color(err, RED)}")
+
+        print(f"\nRolled back {len(active)} replacement(s).")
+        return 1 if any_failed else 0
+
+    result = rollback_replacement(args.job_id)
+    if result["success"]:
         print(color(f"Rolled back replacement for {args.job_id}", GREEN))
-        print(f"To complete rollback:")
-        print(f"  1. Re-enable original: openclaw cron update {args.job_id} --enable")
-        print(f"  2. Disable/delete the yburn replacement cron")
+        for action in result["actions"]:
+            print(f"  {action}")
     else:
-        print(color(f"No active replacement found for: {args.job_id}", RED))
-    return 0 if success else 1
+        if result["errors"]:
+            for err in result["errors"]:
+                print(color(err, RED))
+        else:
+            print(color(f"No active replacement found for: {args.job_id}", RED))
+    return 0 if result["success"] else 1
 
 
 def cmd_version(args):
@@ -580,7 +616,7 @@ def main():
     # replace
     p_replace = subparsers.add_parser("replace", help="Replace original cron with script-based cron")
     p_replace.add_argument("job_id", help="Job ID to replace")
-    p_replace.add_argument("--dry-run", action="store_true", help="Preview without replacing")
+    p_replace.add_argument("--confirm", action="store_true", help="Actually execute the replacement (default is dry-run)")
     p_replace.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
     p_replace.add_argument("--strict", action="store_true", help="Require full output channel configuration")
     p_replace.set_defaults(func=cmd_replace)
@@ -596,7 +632,8 @@ def main():
 
     # rollback
     p_rollback = subparsers.add_parser("rollback", help="Undo a replacement")
-    p_rollback.add_argument("job_id", help="Original job ID to rollback")
+    p_rollback.add_argument("job_id", nargs="?", help="Original job ID to rollback")
+    p_rollback.add_argument("--all", action="store_true", help="Roll back all active replacements")
     p_rollback.set_defaults(func=cmd_rollback)
 
     # version

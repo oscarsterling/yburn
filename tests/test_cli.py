@@ -3,13 +3,17 @@
 import json
 from argparse import Namespace
 from pathlib import Path
+from unittest.mock import patch
 
 from yburn.classifier import Classification, ClassificationResult
 from yburn.cli import (
     _classify_with_manual_overrides,
     _write_manual_classification,
+    cmd_replace,
+    cmd_rollback,
     cmd_report,
 )
+from yburn.replacer import record_replacement, get_active_replacements
 from yburn.scanner import CronJob
 
 
@@ -89,3 +93,88 @@ class TestReportCommand:
         assert output_path.read_text() == "explicit"
         assert auto_report_path.read_text() == "auto"
         assert "Auto-saved markdown report" in capsys.readouterr().out
+
+
+class TestReplaceDryRunDefault:
+    def test_replace_dry_run_by_default(self, monkeypatch, tmp_path, capsys):
+        """replace shows preview and exits without --confirm."""
+        job = make_job(name="Test Job", job_id="job-1")
+        script_path = tmp_path / "test-job.py"
+        script_path.write_text("print('hello')")
+
+        monkeypatch.setattr("yburn.cli.scan_crons", lambda: [job])
+        monkeypatch.setattr("yburn.cli.get_replacement_for_job", lambda jid: None)
+        monkeypatch.setattr("yburn.converter.SCRIPTS_DIR", tmp_path)
+
+        args = Namespace(job_id="job-1", confirm=False, yes=False, strict=False)
+        code = cmd_replace(args)
+
+        assert code == 0
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+        assert "--confirm" in out
+
+    def test_replace_with_confirm_records(self, monkeypatch, tmp_path, capsys):
+        """replace --confirm actually records the replacement."""
+        job = make_job(name="Test Job", job_id="job-1")
+        script_path = tmp_path / "test-job.py"
+        script_path.write_text("print('hello')")
+
+        monkeypatch.setattr("yburn.cli.scan_crons", lambda: [job])
+        monkeypatch.setattr("yburn.cli.get_replacement_for_job", lambda jid: None)
+        monkeypatch.setattr("yburn.converter.SCRIPTS_DIR", tmp_path)
+
+        recorded = []
+        original_record = record_replacement
+        def fake_record(*a, **kw):
+            from yburn.replacer import Replacement
+            r = Replacement(
+                original_job_id="job-1", original_job_name="Test Job",
+                original_schedule={}, script_path=str(script_path),
+                template_name="manual", replaced_at="now", status="active",
+            )
+            recorded.append(r)
+            return r
+        monkeypatch.setattr("yburn.cli.record_replacement", fake_record)
+
+        args = Namespace(job_id="job-1", confirm=True, yes=True, strict=False)
+        code = cmd_replace(args)
+
+        assert code == 0
+        assert len(recorded) == 1
+        out = capsys.readouterr().out
+        assert "Replacement recorded" in out
+
+
+class TestRollbackAll:
+    def test_rollback_all(self, monkeypatch, tmp_path, capsys):
+        """rollback --all rolls back all active replacements."""
+        with patch("yburn.replacer.STATE_DIR", tmp_path):
+            record_replacement("job-1", "Test 1", {}, "/s1.py", "tmpl")
+            record_replacement("job-2", "Test 2", {}, "/s2.py", "tmpl")
+
+            with patch("yburn.replacer.subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stderr = ""
+                args = Namespace(job_id=None, all=True)
+                code = cmd_rollback(args)
+
+            assert code == 0
+            assert len(get_active_replacements()) == 0
+            out = capsys.readouterr().out
+            assert "Test 1" in out
+            assert "Test 2" in out
+
+    def test_rollback_all_empty(self, monkeypatch, tmp_path, capsys):
+        """rollback --all with no active replacements."""
+        with patch("yburn.replacer.STATE_DIR", tmp_path):
+            args = Namespace(job_id=None, all=True)
+            code = cmd_rollback(args)
+            assert code == 0
+            assert "No active replacements" in capsys.readouterr().out
+
+    def test_rollback_requires_job_id_or_all(self, capsys):
+        """rollback without job_id or --all shows error."""
+        args = Namespace(job_id=None, all=False)
+        code = cmd_rollback(args)
+        assert code == 1

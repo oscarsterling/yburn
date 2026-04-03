@@ -154,13 +154,15 @@ class TestReplacementTracking:
     def test_rollback(self, temp_state_dir):
         record_replacement("job-1", "Test", {}, "/s.py", "tmpl")
         result = rollback_replacement("job-1")
-        assert result is True
+        assert result["success"] is False  # openclaw not available in test
+        assert any("rolled_back" in a for a in result["actions"])
         loaded = load_replacements()
         assert loaded[0].status == "rolled_back"
 
     def test_rollback_nonexistent(self, temp_state_dir):
         result = rollback_replacement("nonexistent")
-        assert result is False
+        assert result["success"] is False
+        assert len(result["errors"]) > 0
 
     def test_get_active_replacements(self, temp_state_dir):
         record_replacement("job-1", "Test 1", {}, "/s1.py", "tmpl")
@@ -186,3 +188,84 @@ class TestReplacementTracking:
         rollback_replacement("job-1")
         r = get_replacement_for_job("job-1")
         assert r is None
+
+    def test_original_payload_saved_and_loaded(self, temp_state_dir):
+        payload = {"id": "job-1", "name": "Test", "schedule": {"kind": "cron"}}
+        r = record_replacement(
+            "job-1", "Test", {}, "/s.py", "tmpl",
+            original_payload=payload, original_enabled=False,
+        )
+        assert r.original_payload == payload
+        assert r.original_enabled is False
+
+        loaded = load_replacements()
+        assert loaded[0].original_payload == payload
+        assert loaded[0].original_enabled is False
+
+    def test_backward_compat_load_without_new_fields(self, temp_state_dir):
+        """Old JSON files without original_payload/original_enabled load fine."""
+        old_data = [{
+            "original_job_id": "job-1",
+            "original_job_name": "Test",
+            "original_schedule": {},
+            "script_path": "/s.py",
+            "template_name": "tmpl",
+            "replaced_at": "2026-01-01T00:00:00Z",
+            "status": "active",
+            "new_cron_id": None,
+        }]
+        state_path = temp_state_dir / "replacements.json"
+        state_path.write_text(json.dumps(old_data))
+
+        loaded = load_replacements()
+        assert len(loaded) == 1
+        assert loaded[0].original_payload is None
+        assert loaded[0].original_enabled is True
+
+    def test_rollback_calls_openclaw_enable(self, temp_state_dir):
+        """Rollback re-enables original cron via openclaw CLI."""
+        record_replacement(
+            "job-1", "Test", {}, "/s.py", "tmpl",
+            new_cron_id="new-1", original_enabled=True,
+        )
+        with patch("yburn.replacer.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stderr = ""
+            result = rollback_replacement("job-1")
+
+        assert result["success"] is True
+        calls = mock_run.call_args_list
+        # Should call enable on original and disable on replacement
+        assert any("--enable" in str(c) for c in calls)
+        assert any("--disable" in str(c) for c in calls)
+
+    def test_rollback_skips_enable_if_originally_disabled(self, temp_state_dir):
+        """If original was disabled, rollback doesn't re-enable it."""
+        record_replacement(
+            "job-1", "Test", {}, "/s.py", "tmpl",
+            original_enabled=False,
+        )
+        with patch("yburn.replacer.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stderr = ""
+            result = rollback_replacement("job-1")
+
+        # Should NOT have called openclaw with --enable
+        for call in mock_run.call_args_list:
+            assert "--enable" not in call[0][0]
+
+    def test_rollback_all(self, temp_state_dir):
+        """Rolling back multiple replacements works."""
+        record_replacement("job-1", "Test 1", {}, "/s1.py", "tmpl")
+        record_replacement("job-2", "Test 2", {}, "/s2.py", "tmpl")
+
+        # Roll back all by iterating active replacements
+        active = get_active_replacements()
+        assert len(active) == 2
+
+        for r in active:
+            rollback_replacement(r.original_job_id)
+
+        assert len(get_active_replacements()) == 0
+        loaded = load_replacements()
+        assert all(r.status == "rolled_back" for r in loaded)
