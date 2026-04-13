@@ -1,7 +1,3 @@
-# Security Policy for yburn
-# https://pypi.org/project/yburn/
-
-Contact: https://github.com/oscarsterling/yburn/security/advisories/new
+Contact: oscar.exec.asst@gmail.com
 Preferred-Languages: en
-Policy: https://github.com/oscarsterling/yburn/blob/main/SECURITY.md
-Expires: 2027-04-03T00:00:00.000Z
+Policy: https://github.com/oscarsterling/yburn/blob/main/CONTRIBUTING.md#security

@@ -6,7 +6,7 @@ Thanks for wanting to help. This doc covers how to contribute without stepping o
 
 - Open an issue first for anything non-trivial. Saves everyone time.
 - Check open issues and PRs - someone may already be on it.
-- For security issues, **do not open a public issue** - see [SECURITY.md](SECURITY.md).
+- For security issues, **do not open a public issue** - see the [Security](#security) section below.
 
 ## What We Want
 
@@ -31,7 +31,7 @@ pip install -e ".[dev]"
 python3 -m pytest tests/ -q
 ```
 
-All 287 tests should pass before you touch anything.
+All tests should pass before you touch anything.
 
 ## Making a Change
 
@@ -40,8 +40,9 @@ All 287 tests should pass before you touch anything.
 3. Make your change
 4. Add or update tests - **no test, no merge**
 5. Run the full suite: `python3 -m pytest tests/ -q`
-6. Commit with a clear message: `fix: what you fixed` or `feat: what you added`
-7. Open a PR against `main`
+6. Run the linter: `ruff check .`
+7. Commit with a clear message: `fix: what you fixed` or `feat: what you added`
+8. Open a PR against `main`
 
 ## Adding a Template
 
@@ -63,14 +64,45 @@ Open an issue describing your template before building it so we can confirm it f
 
 ## Code Style
 
-- PEP 8, no formatter required (yet)
+- Python, PEP 8 baseline
+- Ruff for linting (`ruff check .`)
 - Type hints where they add clarity
 - Docstrings on public functions
 - No f-strings with complex expressions - keep them readable
 
+## Security
+
+**Do not open a public GitHub issue for security vulnerabilities.**
+
+Email **oscar.exec.asst@gmail.com** with:
+
+- Description of the vulnerability
+- Steps to reproduce
+- Affected version(s)
+- Potential impact
+
+### What constitutes a security issue
+
+- Path traversal or arbitrary file write/read outside expected directories
+- Command injection through user-supplied config values or template parameters
+- Credential or token exposure in logs, state files, or generated scripts
+- Privilege escalation through subprocess calls
+- Dependency vulnerabilities with a known exploit
+
+### What to expect
+
+- Acknowledgment within **48 hours**
+- Status update within 7 days
+- Fix or mitigation within 90 days (sooner for critical issues)
+- Credit in the release notes if desired
+
+### Out of scope
+
+Issues requiring physical access to the machine, or issues in openclaw itself (report those upstream).
+
 ## PR Review
 
-PRs are reviewed by the maintainer within a few days. We'll tell you clearly if something needs changes or won't be merged, and why.
+PRs are reviewed by the maintainer within a few days. We will tell you clearly if something needs changes or will not be merged, and why.
 
 ## License
 
