@@ -1,3 +1,6 @@
+> **This project has moved.** It now lives in the Clelp Skills monorepo:
+> https://github.com/oscarsterling/clelp-skills/tree/main/yburn
+
 # yburn
 
 **Why burn tokens on tasks that don't think?**
